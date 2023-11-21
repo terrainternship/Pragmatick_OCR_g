@@ -3,32 +3,12 @@ os.environ['USE_TORCH'] = '1'
 from doctr.io import DocumentFile
 from doctr.models import ocr_predictor
 import json
-import torch
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-import torchvision.transforms as transforms
-from torchvision.models import resnet50, ResNet50_Weights
-from torchvision.io import read_image, ImageReadMode
-
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-
-
-vmodel = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
-vmodel.fc = torch.nn.Linear(2048, 5)
-vmodel.to(device)
-
 model = ocr_predictor(det_arch='db_resnet50', reco_arch='crnn_vgg16_bn', pretrained=True)
-model.to(device)
-
 # PDF
 # doc = DocumentFile.from_pdf("path/to/your/doc.pdf")
 # doc = DocumentFile.from_images("753_1.jpg")
 # doc = DocumentFile.from_images("753_2.jpg")
 doc = DocumentFile.from_images("753_3.jpg")
-#doc=doc.to(device)
-
 # Analyze
 result = model(doc)
 data = result.export()
