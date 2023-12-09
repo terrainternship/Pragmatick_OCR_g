@@ -9,7 +9,7 @@ from GrigorukAlex.parser_pdf.bboxes import parse, cut_bbox_from_img
 
 # Получим PNG-изображение таблицы ЗА-ПРОТИВ-ВОЗДЕРЖАЛСЯ для дальнейшего использования при создании датасета
 # Конвертируем исходный PDF в PNG.
-path_pdf = 'testPDF.pdf'
+path_pdf = 'ds/get_param/testPDF.pdf'
 parse(path_pdf,
       skip_num_tables=4,  # Кол-во таблиц, которые нужно пропустить на первой странице
       padding=(0.0, 0.05, 0.15, 0.0),  # есть отступы сверху и снизу, чтобы не обрезались границы таблицы
@@ -18,9 +18,9 @@ parse(path_pdf,
       flag_draw_bboxes=False  # Без отрисовки bboxes
       )
 # Путь к PNG-изображению 1-й страницы PDF
-path_img_pdf = 'testPDF/page_1.png'
+path_img_pdf = 'ds/get_param/testPDF/page_1.png'
 # Путь JSON-файлу с bboxes для таблиц в PDF
-path_bboxes_json = 'testPDF.json'
+path_bboxes_json = 'ds/get_param/testPDF.json'
 
 # Получим шаблон изображения таблицы ЗА-ПРОТИВ-ВОЗДЕРЖАЛСЯ.
 # Вырежем из PNG-изображения 1-й страницы PDF 1-й bbox из JSON-файла с bboxes для таблиц в PDF
@@ -31,7 +31,7 @@ with open(path_bboxes_json, 'r') as j:
 bbox = bboxes_pages['pages']['1']['tables']['1']
 img_bbox = cut_bbox_from_img(path_img_pdf, bbox)
 # Сохраняем изображение
-cv2.imwrite('img_table.png', img_bbox)
+cv2.imwrite('ds/get_param/img_table.png', img_bbox)
 print('размер PNG-изображения таблицы:', img_bbox.shape[1], 'x', img_bbox.shape[0], 'px')
 
 # Определяем размер bbox для распознавания. Для этого зададим отступы и получим изображение таблицы с отступами

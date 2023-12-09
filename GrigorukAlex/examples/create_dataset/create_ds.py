@@ -1,9 +1,9 @@
 from GrigorukAlex.create_dataset.dataset import DataSet
 
-num_imgs = 200
-path_dataset = 'ds/ds_multilabel_' + str(num_imgs)  # папка для сохранения датасета
-path_marks = 'ds/marks'  # папка с метками
-path_img_table = 'img_table.png'  # путь к изображению таблицы
+num_imgs = 300
+path_dataset = 'ds/create_ds/ds_multilabel_' + str(num_imgs)  # папка для сохранения датасета
+path_marks = 'ds/create_ds/marks'  # папка с метками
+path_img_table = 'ds/create_ds/img_table.png'  # путь к изображению таблицы
 fon_size = (690, 35)  # высота и ширина фона
 params = {
     'threshold_wb': 240,  # порог преобразования в бело-чёрное изображение

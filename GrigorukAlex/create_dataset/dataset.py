@@ -40,6 +40,10 @@ class ImgWb:
         # делаем из оттенков серого бело-чёрное изображение по порогу (добавляем контраста)
         self.img_wb = np.uint8((self.img_wb > threshold) * 255)
 
+    def invert_img(self):
+        """Инвертирует цвета чёрно-белое в бело-чёрное и наоборот"""
+        self.img_wb = np.uint8((self.img_wb < 128) * 255)
+
     @staticmethod
     def create_black_img(height, width):
         # Создание чёрного изображения с размером shape
@@ -130,11 +134,6 @@ class DataSet:
              border_down = 1.3      # граница снизу таблицы
         }
         """
-        self.img_fon_table_wb = None  # бело-чёрное изображение таблицы на фоне
-        self.img_table_wb = None  # бело-чёрное изображение таблицы
-        self.img_fon = None  # чёрный фон
-        self.imgs_marks_wb = []  # бело-чёрные изображения меток
-
         # Параметры
         self.path_dataset = path_dataset  # папка для сохранения датасета
         self.path_marks = path_marks  # папка с метками
@@ -142,6 +141,12 @@ class DataSet:
         self.fon_height, self.fon_width = fon_size  # высота и ширина фона
         self.params = params  # параметры генерации базы данных
         self.num_imgs = num_imgs  # общее кол-во изображений в датасете
+
+        # Прочее
+        self.img_fon_table_wb = None  # бело-чёрное изображение таблицы на фоне
+        self.img_table_wb = None  # бело-чёрное изображение таблицы
+        self.img_fon = None  # чёрный фон
+        self.imgs_marks_wb = []  # бело-чёрные изображения меток
 
         self.zones = {'за': 0, 'против': 1, 'воздержался': 2}
         # self.categories = {'за': 'za', 'против': 'protiv', 'воздержался': 'vozderjalsa', 'испорчен': 'isporchen'}
@@ -319,6 +324,7 @@ class DataSet:
             img_end = self.img_fon.add_img(img_all_rotation, position_center_table_marks)
             # преобразуем из оттенков серого в бело-чёрное изображение по порогу (добавляем контраста)
             img_end.contrast(self.params['threshold_contrast'])
+            img_end.invert_img()  # инвертируем цвет
 
             # Сохраняем изображение
             # self.cur_path_img = os.path.join(self.path_dataset, self.categories[self.cur_category],
@@ -326,10 +332,13 @@ class DataSet:
             self.cur_path_img = \
                 f'{self.path_dataset}/{self.categories[self.cur_category]}/{str(self.cur_number_imgs)}.png'
 
+            # Формируем таблицу с метками
             # print(f'{self.cur_path_img} : {self.cur_label}')
             label = ''.join(self.cur_label)
             new_row = pd.DataFrame([{'filepath': self.cur_path_img, 'label_str': label}])
             self.df_ds = pd.concat([self.df_ds, new_row], ignore_index=True)
+
+            # Сохраняем конечное изображение
             cv2.imwrite(self.cur_path_img, img_end.img_wb)
 
     def create_imgs_for_category(self, category, num_imgs):
@@ -354,3 +363,29 @@ class DataSet:
         self.cur_number_imgs = 0
         for zs in list_zones:
             self.create_imgs_for_zones(zs, num)
+
+    @staticmethod
+    def RGB_to_bw(img, max_percentage_of_filling=12.0, step_threshold=2):
+        """Конвертация RGB-изображения в чёрно-белое
+        :param img: входное изображение
+        :param max_percentage_of_filling: (в %) максимальный процент заполнения искомым изображением на фоне
+        :param step_threshold: шаг поиска границы threshold_wb
+        """
+        threshold_wb = 5
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # преобразуем в чёрно-белое
+        # Динамический подбор параметров threshold_wb
+        # Определяется как среднее значение numpy-массива изображения
+        threshold_wb = np.average(img_gray)  # в первом приближении
+        img_wb = None
+        percentage_of_filling = 100.0  # в %. Стартовое значение для цикла
+        while percentage_of_filling > max_percentage_of_filling:  # достигли, требуемого значения
+            # img_wb = np.uint8((img_gray < threshold_wb) * 255)  # преобразуем в бело-чёрное по порогу
+            img_wb = np.uint8((img_gray > threshold_wb) * 255)  # преобразуем в чёрно-белое по порогу
+            # DataSet.imshow(str(percentage_of_filling), img_wb)
+            # Считаем процент чёрного в чёрно-белом изображении. Для хорошего изображения без лишнего шума должен быть
+            # меньше заданного max_percentage_of_filling
+            percentage_of_filling = np.sum(img_wb == 0) * 100.0 / img_wb.size  # в %
+            threshold_wb -= step_threshold
+            if threshold_wb < 0:  # уменьшать дальше нельзя, выходим из цикла
+                break
+        return img_wb
