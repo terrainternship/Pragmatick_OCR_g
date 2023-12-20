@@ -1,6 +1,6 @@
 from GrigorukAlex.create_dataset.dataset import DataSet
 
-num_imgs = 300
+num_imgs = 200000
 path_dataset = 'ds/create_ds/ds_multilabel_' + str(num_imgs)  # папка для сохранения датасета
 path_marks = 'ds/create_ds/marks'  # папка с метками
 path_img_table = 'ds/create_ds/img_table.png'  # путь к изображению таблицы
