@@ -6,11 +6,12 @@ from PIL import Image
 import cv2
 import time
 #from trform import trf
-from votemodules import vote,aline
+from votemodules import image_align, vote
 
-
-device='cuda'
 device='cpu'
+device='cuda'
+vpath='weights/chpt35-col.pth'
+vdim=3
 
 DESCRIPTION = '''# <div align="center">Vote Inference Demo. by Yuri D.Kobyzev(c) v.0.0.1 </div>
 <div align="center">
@@ -24,9 +25,10 @@ if __name__ == '__main__':
         gr.Markdown(DESCRIPTION)
         with gr.Tabs():
             with gr.TabItem('Выравнивание документа'):
-                aline.Aline()
+                image_align.Align()
             with gr.TabItem('Определение результата голосования'):
-                vote.Vote(device)
+                vote.Vote(vpath,vdim, device)
 
 #demo.queue().launch(share=False,debug=True)
-demo.queue().launch(auth=("vote","vote"), debug=True, share=False, root_path="/vote")
+demo.queue().launch( debug=True, share=False)
+#demo.queue().launch(auth=("vote","vote"), debug=True, share=False, root_path="/vote")
