@@ -15,6 +15,7 @@ from skimage.transform import hough_line, hough_line_peaks
 def rotate_image(image, angle): 
     (h, w) = image.shape[: 2]
     center = (w // 2, h // 2)
+    angle = angle[0]
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
     corrected = cv2.warpAffine(image, M, (w, h), flags = cv2.INTER_CUBIC, borderMode = cv2.BORDER_REPLICATE)
     return corrected
@@ -31,7 +32,6 @@ def deskew_hough(image):
     most_common_angle = mode(np.around(angles, decimals=2))[0]
     skew_angle = np.rad2deg(most_common_angle - np.pi/2)
     image = rotate_image(image, skew_angle)
-     # print(skew_angle)
     return image
 
 

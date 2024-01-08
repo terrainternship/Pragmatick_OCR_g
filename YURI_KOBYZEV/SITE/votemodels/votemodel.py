@@ -6,22 +6,6 @@ from torchvision import models
 from torchvision.models import resnet50,ResNet50_Weights
 from PIL import Image
 
-i2l = { '1000': 'ЗА',
-        '0100': 'ПРОТИВ',
-        '0010': 'ВОЗДЕРЖАЛСЯ',
-        '0001': 'НЕГОЛОСОВАЛ',
-        '1100': 'И-ЗП',
-        '1010': "И-ЗВ",
-        '0110': 'И-ПВ',
-        '1110': 'И-ЗПВ',
-        '1101': 'И-ЗП',
-        '1011': 'И-ЗВ',
-        '0111': 'И-ПВ',
-        '1111': 'И-ЗПВ',
-        '0011': 'ВОЗДЕРЖАЛСЯ',
-        '1001': 'ЗА',
-        '0000': 'НЕГОЛОСОВАЛ'}
-
 def reslabel(a):
   r=''.join([str(s) for s in a.astype(int).tolist()])
   return  r
@@ -29,8 +13,9 @@ def reslabel(a):
 
 
 class Resnext50ml(torch.nn.Module):
-    def __init__(self, mpath,device,n_classes=4):
+    def __init__(self, vpath,device,n_classes):
         super().__init__()
+        print("init model Resnext50ml: ",vpath,n_classes,device)
         resnet = models.resnext50_32x4d()
         resnet.fc = torch.nn.Sequential(
             nn.Dropout(p=0.2),
@@ -38,7 +23,17 @@ class Resnext50ml(torch.nn.Module):
         )
         self.base_model = resnet
         self.sigm = torch.nn.Sigmoid() # for multi label we need sigmoid! not crossentropy
-        self.load_state_dict(torch.load(mpath,map_location=device))
+        self.load_state_dict(torch.load(vpath,map_location=device))
+        self.i2l = {'100': 'ЗА',
+                    '010': 'ПРОТИВ',
+                    '001': 'ВОЗДЕРЖАЛСЯ',
+                    '000': 'НЕГОЛОСОВАЛ',
+                    '110': 'И-ЗП',
+                    '101': "И-ЗВ",
+                    '011': 'И-ПВ',
+                    '111': 'И-ЗПВ', 
+                    }
+
         # inference mode
         self.eval()
         self.mean = [0.485, 0.456, 0.406]
@@ -46,8 +41,8 @@ class Resnext50ml(torch.nn.Module):
         self.device=device
         self.transform = transforms.Compose([ 
             transforms.Resize((256, 256)),
-           # transforms.ToTensor(),
-           # transforms.Normalize(self.mean, self.std)
+            transforms.ToTensor(),
+            transforms.Normalize(self.mean, self.std)
         ])
 
     def forward(self, x):
@@ -57,9 +52,8 @@ class Resnext50ml(torch.nn.Module):
         (h,w,c) = img.shape
         za = [xmin*w, ymin*h, xmax*w, ymax*h]
         im = Image.fromarray(img).crop(za)
-        tim = torch.from_numpy(np.array(self.transform(im)))
-        tim = torch.permute(tim, (2, 0, 1)).unsqueeze(0)
-        tim = tim.type(torch.FloatTensor)
+        tim = self.transform(im)
+        tim = tim.unsqueeze(0)
         return(tim)
 
     def predict(self,im,thr):
@@ -67,19 +61,21 @@ class Resnext50ml(torch.nn.Module):
             im.to(self.device)
             raw_prob = self.forward(im.float()).detach().numpy()[0] 
             if thr==None:
-                thr=0.4
+                thr=0.5
             raw_pred = np.array(raw_prob > thr, dtype=int) 
-            pred_lab = i2l[reslabel(raw_pred)]
-            mlabel=str(raw_pred[0])+str(raw_pred[1])+str(raw_pred[2])+str(raw_pred[3])
+            pred_lab = self.i2l[reslabel(raw_pred)]
+            #mlabel=str(raw_pred[0])+str(raw_pred[1])+str(raw_pred[2])+str(raw_pred[3])
+            mlabel=''.join([str(r) for r in raw_pred])
             rp = np.round(raw_prob,decimals=3)
-            r = [str(rp[0]),str(rp[1]),str(rp[2]),str(rp[3])]
+            r = [str(x) for x in rp]
+            #r = [str(rp[0]),str(rp[1]),str(rp[2]),str(rp[3])]
             print('r rounded list:',r)
             return {'label':  pred_lab, 'mlabel': mlabel, 'prob': r}
 
 ################################
 
 class Resnet50s(torch.nn.Module):
-    def __init__(self,mpath,device,n_classes=2):
+    def __init__(self,mpath,device,n_classes=1):
         super().__init__()
         resnet = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
         resnet.fc = torch.nn.Sequential(
@@ -116,17 +112,21 @@ class Resnet50s(torch.nn.Module):
     def predict(self,im):
         with torch.no_grad(): 
             im.to(self.device)
-            raw_prob = self.forward(im.float()).detach().numpy()[0] 
+            raw_prob = self.forward(im.float()) 
+            raw_prob = torch.sigmoid(raw_prob)
             print(raw_prob)
-            raw_pred = np.argmax(raw_prob)
-            mlabel=str(raw_pred)
+            raw_pred = torch.round(raw_prob)
+            raw_prob = raw_prob.detach().numpy()[0] 
+            raw_pred = raw_pred.detach().numpy()[0] 
+            print(raw_prob)
+            mlabel=str(int(raw_pred[0]))
             print(raw_pred)
             if (raw_pred==1):
-                pred_lab = 'НЕ_ПОДПИСАН'
-            else:
                 pred_lab = 'ПОДПИСАН'
+            else:
+                pred_lab = 'НЕ_ПОДПИСАН'
             np.round(raw_prob,decimals=3)
             rp = np.round(raw_prob,decimals=3)
-            r = [str(rp[0]),str(rp[1])]
+            r = str(rp[0])
             print('r rounded list:',r)
-            return {'label':  pred_lab, 'mlabel': mlabel, 'logit': r}
+            return {'label':  pred_lab, 'mlabel': mlabel, 'prob': r}
