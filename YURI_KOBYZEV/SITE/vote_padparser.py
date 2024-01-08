@@ -2,14 +2,14 @@ import argparse
 import os
 import glob
 import votemodules
-from votemodules.voteparser import vparser
+from votemodules.padparser import padparser
 from votemodules.votemodel import Resnext50ml, Resnet50s
 
 
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source',nargs='+', type=str, default = './images', help='file/dir')
-    parser.add_argument('--jpath', type=str,default='result', help='save results to *.json')
+    parser.add_argument('--jpath', type=str,default='padresult', help='save results to *.json')
     parser.add_argument('--thr', type=float, default=0.5, help='threshold multilable vote')
     parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or cpu')
     opt = parser.parse_args()
@@ -26,7 +26,7 @@ def run(
     print("=================================================================")
     vmodel = Resnext50ml('weights/chpt35-col.pth',device, 3)
     smodel = Resnet50s('weights/vote_bce_resnet50_sign.pt',device, 1)
-    vp = vparser(vmodel, smodel)
+    vp = padparser(vmodel, smodel)
     if isinstance(source,list): 
         images = source
     else:

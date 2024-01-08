@@ -9,6 +9,40 @@ from imutils.perspective import four_point_transform
 from imutils.object_detection import non_max_suppression 
 from skimage.transform import hough_line, hough_line_peaks
 
+# author:    Adrian Rosebrock
+# website:   http://www.pyimagesearch.com
+
+# import the necessary packages
+from scipy.spatial import distance as dist
+import numpy as np
+import cv2
+
+def order_points(pts):
+    # sort the points based on their x-coordinates
+    xSorted = pts[np.argsort(pts[:, 0]), :]
+
+    # grab the left-most and right-most points from the sorted
+    # x-roodinate points
+    leftMost = xSorted[:2, :]
+    rightMost = xSorted[2:, :]
+
+    # now, sort the left-most coordinates according to their
+    # y-coordinates so we can grab the top-left and bottom-left
+    # points, respectively
+    leftMost = leftMost[np.argsort(leftMost[:, 1]), :]
+    (tl, bl) = leftMost
+
+    # now that we have the top-left coordinate, use it as an
+    # anchor to calculate the Euclidean distance between the
+    # top-left and right-most points; by the Pythagorean
+    # theorem, the point with the largest distance will be
+    # our bottom-right point
+    D = dist.cdist(tl[np.newaxis], rightMost, "euclidean")[0]
+    (br, tr) = rightMost[np.argsort(D)[::-1], :]
+
+    # return the coordinates in top-left, top-right,
+    # bottom-right, and bottom-left order
+    return np.array([tl, tr, br, bl], dtype="float32")
 
 class  Aligner:
     def __init__(self,MIN_WIDTH: int = 700, STEP: int = 10, THRESHOLD_1: float = 0.8, THRESHOLD_2: float = 0.85, MAX_DELTA: int = 5):
@@ -149,6 +183,7 @@ class  Aligner:
         is_continue = True
         is_found = False
         width = begin_width
+        best_widths = []
 
         max_width = 0
         while is_continue:
@@ -160,21 +195,25 @@ class  Aligner:
             if is_found:
                 if count == 0:
                     max_width = width - self.STEP
-                    print(f'min_width = {min_width}, best_width = {(max_width+min_width)/2}, max_width = {max_width}')
-                    is_continue = False# Закомментить, если не прекращать при 0
-
+                    is_found = False # снимаем флаг что маркеры были найдены
+                    is_continue = False # Предварительно сбрасываем флаг продолжения цикла поиска
             else:
-                if count > 0:
-                    is_found = True
-                    min_width = width
+                if count > 0: # а в текущей итерации найдены
+                    is_found = True # ставим флаг что маркеры были найдены
+                    min_width = width # запоминаем ширину текущей итерации как min
 
+            # Циклы сравнения координат маркеров, найденных на текущей итерации
+            # с найденными ранее    
             for point in points:
                 is_exists = False
                 for value in result_points:
+                    # Если координаты сопоставимы в пределах MAX_DELTA
                     if abs(value[1].x - point.x) < self.MAX_DELTA\
                             and abs(value[1].y - point.y) < self.MAX_DELTA:
                         is_exists = True
+                        # Инкрементироуем число, определяющее сколько раз этот маркер был найден на разных итерациях
                         value[0] += 1
+                        # уточняем координаты (среднее между старым и новым значениями)
                         value[1] = cmn.Point(x=(value[1].x + point.x)/2,
                                              y=(value[1].y + point.y)/2)
                         break
@@ -182,37 +221,61 @@ class  Aligner:
                     count = len(result_points)
                     result_points.append([1, point])
 
-            if len(result_points)<min_count:
-                min_width = 0
-                is_continue = True
-                is_found = False
-                
-            width += self.STEP
-            if width > break_width:
+            # Если маркеры перестали определяться для текущей ширины,
+            if not is_continue:
+                # Фиксируем ширину предудущей итерации как max
                 max_width = width - self.STEP
-                print(f'min_width = {min_width}, best_width = {(max_width+min_width)/2}, max_width = {max_width}')
+                best_width = (min_width + max_width)/2
+                best_widths.append(best_width)
+                # выводим данные поиска
+                print(
+                        f'min_width = {min_width}, '\
+                        f'best_width = {best_width}, '\
+                        f'max_width = {max_width}, '\
+                        f'всего маркеров: {len(result_points)}'
+                    )   
+                min_width = 0       
+                # Если общее количество найденных маркеров все еще меньше заданного
+                if len(result_points)<min_count:  
+                    # Перевыставляем флаг продолжения
+                    is_continue = True
+            # Увеличиваем ширину картинки для следующей итерации на заданный шаг
+            width += self.STEP
+            if width > break_width: # Если ширина превысила максимальную
+                # Прекращаем поиск (сбрасываем флаг продолжения)
                 is_continue = False
-                
-        
-        best_width = (min_width + max_width)//2
-        # print ('min_width', min_width)
-        # print ('best_width', best_width)
-        # print ('max_width', max_width)
-        print ('count', len(result_points))
-        res:list[cmn.Point] = []
-        if is_found:
-            for value in sorted(result_points, key=lambda x:x[0], reverse=True):
-                if len(res)<min_count:
-                    res.append(value[1])
-                else:
-                    break
+                # Если min_width уже определена,
+                # то есть, с момента последнего вывода образовался новый пул итераций с найденными маркерами
+                if min_width>0:
+                    # Фиксируем ширину предудущей итерации как max
+                    max_width = width - self.STEP
+                    best_width = (min_width + max_width)/2
+                    best_widths.append(best_width)
+                    # выводим данные поиска
+                    print(
+                        f'min_width = {min_width}, '\
+                        f'best_width = {best_width}, '\
+                        f'max_width = {max_width}, '\
+                        f'всего маркеров: {len(result_points)}'
+                        )
 
-        return [res, best_width]
+        res:list[cmn.Point] = []
+        # Готовим к выводу min_count маркеров с максимальным количеством определения на итерациях
+        for value in sorted(result_points, key=lambda x:x[0], reverse=True):
+            if len(res)<min_count:
+                res.append(value[1])
+            else:
+                break
+
+     
+        return [res, best_widths]
 
     def cropping_image_by_markers(self,image: cvtp.MatLike)->cvtp.MatLike:
+ 
         book_image = self.book_orientation_image(image=image)
         angle = self.search_angle(book_image)
-        align_image = self.rotate_image(image=book_image, angle=angle[0])
+        align_image = self.rotate_image(image=book_image, angle=angle)
+        print('align_image', align_image.shape)
         
         # Поворот ч/б изображения делаем отдельно от оригинала!
         # преобразование повернутого изображения к ч/б будет очень темным из-за
@@ -221,42 +284,54 @@ class  Aligner:
         # utl.show_cv2_image('Gray', image_gray)
         image_bw= cv2.threshold(image_gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
         # utl.show_cv2_image('B&W', image_bw)
-        align_image_bw = self.rotate_image(image=image_bw, angle=angle[0])
+        align_image_bw = self.rotate_image(image=image_bw, angle=angle)
         # utl.show_cv2_image('B&W rotated', align_image_bw)
 
         marker_1 = cv2.imread(
-            'markers_images/bw_6_10_20.png')
+        # './meeting_project/image_prepare/markers_images/bw_6x10x20.png'
+            'markers_images/bw_8x14x24.png'
+            )
         marker_1 = cv2.cvtColor(marker_1, cv2.COLOR_BGR2GRAY) 
         marker_1 = cv2.threshold(marker_1, 120, 255, cv2.THRESH_BINARY)[1]
         
         marker_2 = cv2.imread(
-            'markers_images/b_10_20.png')
+            'markers_images/b_14_24.png')
         marker_2 = cv2.cvtColor(marker_2, cv2.COLOR_BGR2GRAY) 
         marker_2 = cv2.threshold(marker_2, 120, 255, cv2.THRESH_BINARY)[1]
         
         # break_width = book_image.shape[1]
-        markers_centers, best_width = self.markers_searcher(image_bw=align_image_bw,
+        markers_centers: list[cmn.Point]=[]
+        #markers_centers, best_width = self.markers_searcher(image_bw=align_image_bw,
+        m_c, best_widths = self.markers_searcher(image_bw=align_image_bw,
                                            begin_width = self.MIN_WIDTH,
                                            break_width = 3*self.MIN_WIDTH,
                                            marker=marker_1,
                                            min_count=1,
                                            threshold=self.THRESHOLD_1                                       )
+
+        markers_centers+=m_c
         if markers_centers[0].y > align_image_bw.shape[0]/2:
             is_rotate_180 = True
         else:
             is_rotate_180 = False
+
         markers_centers += self.markers_searcher(image_bw=align_image_bw,
                                            marker=marker_2,
-                                           begin_width = 0.8*best_width,
-                                           break_width = 1.2*best_width,
+                                           begin_width = 0.8*best_widths[0],
+                                           break_width = 1.2*best_widths[0],
                                            min_count=3,
                                            threshold=self.THRESHOLD_2                                       )[0]
-        img = utl.draw_crosses(align_image, markers_centers, size=20, thickness=2, relative=False)
-    #    utl.show_cv2_image('Markers', img)
-        c=[]
+        #img = utl.draw_crosses(align_image, markers_centers, size=20, thickness=2, relative=False)
+        #utl.show_cv2_image('Markers', img)
+        markers_centers.sort()
+        for i, m in enumerate(markers_centers):
+            print(f'Маркер {i} [{m}]')
+
+        m_centers=[]
         for m in markers_centers:
-            c.append([m.xi, m.yi])
-        wraped_img = four_point_transform(img, np.array(c))
+            m_centers.append([m.xi, m.yi])
+
+        wraped_img = four_point_transform(align_image, np.array(m_centers))
         if (is_rotate_180):
             wraped_img=cv2.rotate(wraped_img, rotateCode=cv2.ROTATE_180)
         return wraped_img

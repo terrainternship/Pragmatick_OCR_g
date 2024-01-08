@@ -1,8 +1,8 @@
 import os
 import cv2
+import json
 import shutil
 import pathlib
-import numpy as np
 import cv2.typing as cvtp
 import classes.common as cmn
 
@@ -50,9 +50,13 @@ def draw_crosses(image_src: cvtp.MatLike,
     #points = points.astype(np.int32)
     # Отмечаем центры квадратов
     for p in points:
-        # cv2.circle(vis, tuple(c), radius, color, thickness)
-        cv2.line(result, (p.xi -size, p.yi), (p.xi+size, p.yi), color, thickness=thickness)
-        cv2.line(result, (p.xi, p.yi-size), (p.xi, p.yi+size), color, thickness=thickness)
+        assert isinstance(p, cmn.Point)
+        cv2.line(result, (p.xi -size, p.yi), (p.xi+size, p.yi),
+                 color, thickness=thickness
+                 )
+        cv2.line(result, (p.xi, p.yi-size), (p.xi, p.yi+size),
+                 color, thickness=thickness
+                 )
     return result
 
 def draw_bboxes(title: str,
@@ -68,6 +72,7 @@ def draw_bboxes(title: str,
     """
 
     for norm_bbox in norm_bboxes:
+        assert isinstance(norm_bbox, cmn.BoundingBox)
         width = image.shape[1] if is_relative else 1
         height = image.shape[0] if is_relative else 1
         left = norm_bbox.left*width
@@ -94,26 +99,40 @@ def clear_dir(path: str):
     except Exception as e:
         print(f'Failed to delete {path}. Reason: {e}')
 
-def create_dir(path: str):
-    """Создание директории (если ее нет)
+def create_dir(path: str)-> bool:
+    """Функция создания директории, если ее нет
 
     Args:
         path (str): путь к папке
+
+    Returns:
+        bool: True - папки не было, она была создана
+            False - папке уже была, не создавалась
     """
     
     p = pathlib.Path(path)
-    p.mkdir(parents=True, exist_ok=True)
+    if os.path.isdir(p):
+        return False
+    else:
+        p.mkdir(parents=True, exist_ok=True)
+        return True
 
-def copy_file(source_path: str, dest_path: str):
-    """Копирование файла
+def copy_file(source_path: str, dest_path: str)-> bool:
+    """Функция копирования файла, если его не существует
 
     Args:
         source_path (str): Путь к файлу источника
         dest_path (str): Путь и имя файла назначения
-    """
-    
-    shutil.copy2(source_path, dest_path)
 
+    Returns:
+        bool: True - файла не было, он был скопирован
+            False - файл уже был, не копировался
+    """
+    if os.path.isfile(dest_path):
+        return False
+    else:
+        shutil.copy2(source_path, dest_path)
+        return True
 
 def save_image(path: str, file_name:str, image: cvtp.MatLike):
     """Сохранение изображения в файл
@@ -139,3 +158,11 @@ def text_to_file(path: str, file_name: str, text: str):
     create_dir(path=path)
     with open(path+os.sep+file_name, 'w') as file:
         file.write(text)
+
+def save_JSON(path: str, file_name: str, JSON_dict: dict()):
+    text = json.dumps(JSON_dict,
+                        sort_keys=False,
+                        indent=4,
+                        ensure_ascii=False
+                        )
+    text_to_file(path=path, file_name = file_name, text=text)
